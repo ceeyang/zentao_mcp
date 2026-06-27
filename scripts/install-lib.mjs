@@ -240,25 +240,6 @@ export function loadEnvFile(projectRoot) {
   return parseEnvLines(readFileSync(envPath, "utf8"));
 }
 
-/** 全自动安装用：读取 .env.install（不进 git） */
-export function loadEnvInstallFile(projectRoot) {
-  const envPath =
-    process.env.ZENTAO_ENV_FILE?.trim() || join(projectRoot, ".env.install");
-  if (!existsSync(envPath)) return { path: envPath, env: {} };
-  return { path: envPath, env: parseEnvLines(readFileSync(envPath, "utf8")) };
-}
-
-/** 将 .env.install 中的变量注入 process.env（不覆盖已有环境变量） */
-export function applyEnvInstall(projectRoot) {
-  const { path, env } = loadEnvInstallFile(projectRoot);
-  for (const [key, value] of Object.entries(env)) {
-    if (process.env[key] === undefined) {
-      process.env[key] = value;
-    }
-  }
-  return path;
-}
-
 function pathExists(path) {
   try {
     return existsSync(path);
@@ -396,26 +377,54 @@ function askYesNo(rl, question, defaultYes = true) {
 }
 
 export async function collectCredentials(projectRoot, options = {}) {
-  const installEnvFile = loadEnvInstallFile(projectRoot);
-  const fileEnv = { ...loadEnvFile(projectRoot), ...installEnvFile.env };
+  const fileEnv = loadEnvFile(projectRoot);
   const existingEnv = loadExistingZentaoEnv();
   const merged = { ...existingEnv, ...fileEnv, ...options.env };
 
   if (options.nonInteractive) {
+    if (options.skipCredentials) {
+      return {
+        env: buildEnvConfig(merged, { url: "", account: "", password: "", skipSsl: true }),
+        credentialsSkipped: true,
+      };
+    }
     const url = merged.ZENTAO_URL || process.env.ZENTAO_URL;
     const account = merged.ZENTAO_ACCOUNT || process.env.ZENTAO_ACCOUNT;
     const password = merged.ZENTAO_PASSWORD ?? process.env.ZENTAO_PASSWORD;
-    if (!url || !account || password === undefined) {
+    if (!url || !account || password === undefined || password === "") {
       throw new Error(
-        "Non-interactive mode requires ZENTAO_URL, ZENTAO_ACCOUNT, ZENTAO_PASSWORD in env or .env",
+        "非交互模式需要环境变量 ZENTAO_URL / ZENTAO_ACCOUNT / ZENTAO_PASSWORD，或加 --skip-credentials 稍后配置",
       );
     }
-    return buildEnvConfig(merged, { url, account, password });
+    return {
+      env: buildEnvConfig(merged, { url, account, password }),
+      credentialsSkipped: false,
+    };
   }
 
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   try {
     console.log("\n=== 禅道 MCP 配置 ===\n");
+    const configureNow = await askYesNo(
+      rl,
+      "现在配置禅道账号？（选「否」可先装好 MCP，稍后在配置文件 env 里填写）",
+      true,
+    );
+
+    if (!configureNow) {
+      console.log("→ 已跳过账号配置，安装完成后请编辑 MCP 配置中的 env 字段");
+      return {
+        env: buildEnvConfig(merged, {
+          url: "",
+          account: "",
+          password: "",
+          skipSsl: true,
+          allowResolve: false,
+        }),
+        credentialsSkipped: true,
+      };
+    }
+
     const url = await ask(rl, "禅道地址 ZENTAO_URL", merged.ZENTAO_URL || "");
     const account = await ask(rl, "账号 ZENTAO_ACCOUNT", merged.ZENTAO_ACCOUNT || "");
     const password = await ask(
@@ -433,13 +442,16 @@ export async function collectCredentials(projectRoot, options = {}) {
       "允许 AI 标记 Bug 已解决 ZENTAO_ALLOW_RESOLVE_BUG",
       String(merged.ZENTAO_ALLOW_RESOLVE_BUG ?? "false").toLowerCase() === "true",
     );
-    return buildEnvConfig(merged, {
-      url,
-      account,
-      password,
-      skipSsl,
-      allowResolve,
-    });
+    return {
+      env: buildEnvConfig(merged, {
+        url,
+        account,
+        password,
+        skipSsl,
+        allowResolve,
+      }),
+      credentialsSkipped: !url || !account || !password,
+    };
   } finally {
     rl.close();
   }
@@ -507,14 +519,18 @@ export async function selectPlatforms(options = {}) {
 
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   try {
-    console.log("\n可选 AI 平台：");
+    const detected = detectInstalledPlatforms();
+    console.log("\n可选 AI 平台（auto=自动检测 / all=全部）：");
+    if (detected.length > 0) {
+      console.log(`  检测到: ${detected.join(", ")}`);
+    }
     for (const key of availableKeys) {
       console.log(`  - ${key}: ${PLATFORMS[key].label}`);
     }
     const answer = await ask(
       rl,
-      "要安装到哪些平台（逗号分隔，all=全部）",
-      "cursor,claude",
+      "要安装到哪些平台",
+      "auto",
     );
     return parsePlatformSelection(answer, availableKeys);
   } finally {

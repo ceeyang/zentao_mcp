@@ -31,7 +31,6 @@
     "install.cmd",
     "auto-install.sh",
     "auto-install.ps1",
-    ".env.install.example",
     "mcp.json.example",
     ".env.example",
     "README.md",
@@ -46,7 +45,6 @@
     "pack:release": "npm run build && mkdir -p release && npm pack --pack-destination release",
     "smoke": "node scripts/smoke-test.mjs",
     "install:mcp": "node scripts/install.mjs",
-    "install:auto": "node scripts/install.mjs --yes",
     "install:urls": "node scripts/github-source.mjs",
     "test:install": "bash scripts/e2e-install-test.sh",
     "verify:github": "node scripts/verify-github.mjs"

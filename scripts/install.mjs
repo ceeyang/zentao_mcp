@@ -2,17 +2,13 @@
 /**
  * 禅道 MCP 一键安装：写入多个 AI 平台的 MCP 配置。
  *
- * Usage:
- *   node scripts/install.mjs
- *   node scripts/install.mjs --platforms cursor,claude,windsurf
- *   ZENTAO_URL=... ZENTAO_ACCOUNT=... ZENTAO_PASSWORD=... node scripts/install.mjs --yes
+ * 用户只需: curl -fsSL .../install.sh | bash
  */
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import {
   applyPlatformConfig,
-  applyEnvInstall,
   collectCredentials,
   detectInstalledPlatforms,
   ensureBuilt,
@@ -31,6 +27,7 @@ import {
 function parseArgs(argv) {
   const options = {
     nonInteractive: false,
+    skipCredentials: false,
     platforms: null,
     skipBuild: false,
     listPlatforms: false,
@@ -42,6 +39,7 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === "--yes" || arg === "-y") options.nonInteractive = true;
+    else if (arg === "--skip-credentials") options.skipCredentials = true;
     else if (arg === "--skip-build") options.skipBuild = true;
     else if (arg === "--list-platforms") options.listPlatforms = true;
     else if (arg === "--detect-platforms") options.detectPlatforms = true;
@@ -59,31 +57,23 @@ function printHelp() {
   console.log(`
 禅道 MCP 一键安装
 
-Usage:
-  ./install.sh
+一条命令（无需 clone）:
   curl -fsSL https://raw.githubusercontent.com/ceeyang/zentao_mcp/main/install.sh | bash
-  node scripts/install.mjs [options]
 
 Options:
-  -y, --yes                 非交互模式（需环境变量或 .env）
-  -p, --platforms <list>    目标平台：auto / all / cursor,claude,...
-  --detect-platforms        打印本机检测到的平台（逗号分隔）
+  -p, --platforms <list>    auto（默认）/ all / cursor,claude,...
+  --detect-platforms        打印本机检测到的平台
   --list-platforms          列出支持的平台
-  --show-urls               打印 GitHub 网络一键安装命令
+  --show-urls               打印网络安装命令
   --skip-build              跳过 npm run build
+  -y, --yes                 非交互（需环境变量或 --skip-credentials）
+  --skip-credentials        非交互且不填禅道账号（稍后编辑 MCP 配置）
   -h, --help                显示帮助
 
-GitHub:
-  ZENTAO_MCP_REPO           默认 ceeyang/zentao_mcp
-  ZENTAO_MCP_BRANCH         默认 main
-  ZENTAO_MCP_INSTALL_DIR    默认 ~/.local/share/zentao-mcp
-
-Environment:
+Environment（仅 CI / 批量部署）:
   ZENTAO_URL / ZENTAO_ACCOUNT / ZENTAO_PASSWORD
-  ZENTAO_SKIP_SSL / ZENTAO_ALLOW_RESOLVE_BUG
-  INSTALL_PLATFORMS         非交互模式：auto（默认）/ all / 逗号列表
-  ZENTAO_ENV_FILE           凭据文件路径，默认 .env.install
-  ZENTAO_NODE_PATH          指定 node 可执行文件绝对路径
+  INSTALL_PLATFORMS           auto / all / 逗号列表
+  ZENTAO_NODE_PATH            指定 node 绝对路径
 
 Supported platforms:
   ${Object.entries(PLATFORMS)
@@ -103,6 +93,16 @@ function runBuild(projectRoot) {
   if (result.status !== 0) {
     throw new Error("npm run build failed");
   }
+}
+
+function printConfigureLaterHint(results) {
+  console.log(`
+⚠ 禅道账号尚未配置。请在以下文件的 zentao.env 中填写:
+   ZENTAO_URL / ZENTAO_ACCOUNT / ZENTAO_PASSWORD`);
+  for (const item of results) {
+    console.log(`   - ${item.configPath}`);
+  }
+  console.log("");
 }
 
 async function main() {
@@ -128,8 +128,6 @@ async function main() {
   }
 
   const projectRoot = getProjectRoot();
-  applyEnvInstall(projectRoot);
-  console.log(`项目目录: ${projectRoot}`);
 
   if (!existsSync(join(projectRoot, "node_modules"))) {
     console.log("→ 安装依赖 npm install ...");
@@ -152,8 +150,11 @@ async function main() {
   const entryPath = resolveEntryPath(projectRoot);
   const nodePath = resolveNodePath();
 
-  const env = await collectCredentials(projectRoot, options);
-  if (!env.ZENTAO_URL || !env.ZENTAO_ACCOUNT || !env.ZENTAO_PASSWORD) {
+  const { env, credentialsSkipped } = await collectCredentials(projectRoot, options);
+  if (
+    !credentialsSkipped &&
+    (!env.ZENTAO_URL || !env.ZENTAO_ACCOUNT || !env.ZENTAO_PASSWORD)
+  ) {
     throw new Error("ZENTAO_URL / ZENTAO_ACCOUNT / ZENTAO_PASSWORD 不能为空");
   }
 
@@ -179,14 +180,14 @@ async function main() {
     if (item.backupPath) console.log(`  备份: ${item.backupPath}`);
   }
 
-  console.log(`
-下一步:
-  1. 完全重启对应 AI 客户端（Cursor / Claude Desktop / Windsurf 等）
+  if (credentialsSkipped) {
+    printConfigureLaterHint(results);
+  }
+
+  console.log(`下一步:
+  1. 完全重启对应 AI 客户端
   2. 在 MCP 面板确认 "${SERVER_NAME}" 已连接
   3. 对话测试: "调用 zentao_health_check 检查禅道连接"
-
-自检:
-  npm run smoke
 `);
 }
 

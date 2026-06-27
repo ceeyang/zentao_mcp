@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
-# 禅道 MCP 一键安装（支持本地目录 + GitHub 网络安装）
+# 禅道 MCP 一键安装 — 无需 clone，一条命令即可
 #
-# 网络一键安装:
 #   curl -fsSL https://raw.githubusercontent.com/ceeyang/zentao_mcp/main/install.sh | bash
 #
-# 非交互:
-#   curl -fsSL https://raw.githubusercontent.com/ceeyang/zentao_mcp/main/install.sh | bash -s -- --yes
+# 脚本会自动：下载到 ~/.local/share/zentao-mcp → npm install → 构建 → 交互配置
+# 禅道账号可安装时输入，也可选「稍后配置」再编辑 MCP 配置文件
 set -euo pipefail
 
 REPO="${ZENTAO_MCP_REPO:-ceeyang/zentao_mcp}"
@@ -20,16 +19,13 @@ _is_local_install() {
 }
 
 _download_from_github() {
-  local archive tmp extracted repo_name
-  repo_name="${REPO##*/}"
+  local archive tmp extracted
   tmp="$(mktemp -d)"
   archive="${tmp}/repo.tar.gz"
 
   echo "→ 从 GitHub 下载 ${REPO} (${BRANCH}) ..."
-  echo "  https://github.com/${REPO}/archive/refs/heads/${BRANCH}.tar.gz"
-
   if ! curl -fsSL "https://github.com/${REPO}/archive/refs/heads/${BRANCH}.tar.gz" -o "${archive}"; then
-    echo "错误: 下载失败，请检查仓库地址与网络" >&2
+    echo "错误: 下载失败，请检查网络或仓库地址" >&2
     rm -rf "${tmp}"
     exit 1
   fi
@@ -40,14 +36,14 @@ _download_from_github() {
   extracted="$(find "${tmp}" -mindepth 1 -maxdepth 1 -type d | head -1)"
 
   if [[ -z "${extracted}" || ! -f "${extracted}/scripts/install.mjs" ]]; then
-    echo "错误: 解压后未找到 scripts/install.mjs" >&2
+    echo "错误: 解压后未找到安装脚本" >&2
     rm -rf "${tmp}"
     exit 1
   fi
 
   cp -R "${extracted}/." "${INSTALL_DIR}/"
   rm -rf "${tmp}"
-  echo "→ 已安装到 ${INSTALL_DIR}"
+  echo "→ 已下载到 ${INSTALL_DIR}"
 }
 
 _sync_from_github() {
@@ -89,5 +85,10 @@ if [[ "${NODE_MAJOR}" -lt 18 ]]; then
   echo "错误: 需要 Node.js >= 18，当前 $(node -v)" >&2
   exit 1
 fi
+
+echo ""
+echo "=== 禅道 MCP 安装 ==="
+echo "  安装目录: ${ROOT}"
+echo ""
 
 exec node "${ROOT}/scripts/install.mjs" "$@"

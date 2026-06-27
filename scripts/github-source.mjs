@@ -55,51 +55,34 @@ export function getGithubUrls(config, env = process.env) {
     installShUrl: `${rawBase}/install.sh`,
     installPs1Url: `${rawBase}/install.ps1`,
     installCmdUrl: `${rawBase}/install.cmd`,
-    autoInstallShUrl: `${rawBase}/auto-install.sh`,
-    autoInstallPs1Url: `${rawBase}/auto-install.ps1`,
   };
 }
 
 export function printInstallOneLiners(config = readRepoConfig()) {
   const urls = getGithubUrls(config);
   console.log(`
-GitHub 一键安装（网络地址）
+禅道 MCP 一键安装（无需 clone 仓库）
 
-交互式安装（macOS / Linux）:
+macOS / Linux — 复制这一条即可:
   curl -fsSL ${urls.installShUrl} | bash
 
-全自动安装（推荐，零交互）:
-  cp .env.install.example .env.install   # 填写凭据后
-  curl -fsSL ${urls.autoInstallShUrl} | bash
-
-或 inline 环境变量:
-  ZENTAO_URL=https://zentao.example.com \\
-  ZENTAO_ACCOUNT=your_account \\
-  ZENTAO_PASSWORD=your_password \\
-  ZENTAO_SKIP_SSL=true \\
-  INSTALL_PLATFORMS=auto \\
-  curl -fsSL ${urls.autoInstallShUrl} | bash
-
-非交互（install.sh）:
-  ZENTAO_URL=https://zentao.example.com \\
-  ZENTAO_ACCOUNT=your_account \\
-  ZENTAO_PASSWORD=your_password \\
-  INSTALL_PLATFORMS=cursor,claude \\
-  curl -fsSL ${urls.installShUrl} | bash -s -- --yes
-
-Windows PowerShell（全自动）:
-  irm ${urls.autoInstallPs1Url} | iex
-
-Windows PowerShell（交互）:
+Windows PowerShell:
   irm ${urls.installPs1Url} | iex
 
 Windows CMD:
   curl -fsSL ${urls.installCmdUrl} -o %TEMP%\\zentao-install.cmd && %TEMP%\\zentao-install.cmd
 
+安装过程会提示输入禅道账号；也可选「稍后配置」，再编辑 MCP 配置文件 env。
+
+CI / 批量部署（非交互）:
+  ZENTAO_URL=... ZENTAO_ACCOUNT=... ZENTAO_PASSWORD=... \\
+  curl -fsSL ${urls.installShUrl} | bash -s -- --yes
+
+稍后配置账号:
+  curl -fsSL ${urls.installShUrl} | bash -s -- --yes --skip-credentials
+
 仓库: https://github.com/${urls.github}
-分支: ${urls.branch}
 安装目录: ${resolveInstallDir(config)}
-Raw 全自动脚本: ${urls.autoInstallShUrl}
 `);
 }
 

@@ -1,10 +1,11 @@
 # 禅道 MCP 一键安装 (Windows PowerShell)
-# 网络一键安装:
+# 一条命令，无需 clone:
 #   irm https://raw.githubusercontent.com/ceeyang/zentao_mcp/main/install.ps1 | iex
 param(
   [switch]$Yes,
   [string]$Platforms,
   [switch]$SkipBuild,
+  [switch]$SkipCredentials,
   [switch]$ListPlatforms,
   [switch]$Help,
   [switch]$ShowUrls
@@ -53,7 +54,7 @@ function Sync-FromGitHub {
     Copy-Item -Path (Join-Path $extracted.FullName "*") -Destination $InstallDir -Recurse -Force
     Remove-Item -Recurse -Force $tmpDir, $tmpZip -ErrorAction SilentlyContinue
   }
-  Write-Host "→ 已安装到 $InstallDir"
+  Write-Host "→ 已下载到 $InstallDir"
 }
 
 function Get-NodeCommand {
@@ -86,8 +87,14 @@ if ($major -lt 18) {
   throw "需要 Node.js >= 18，当前 $version"
 }
 
+Write-Host ""
+Write-Host "=== 禅道 MCP 安装 ==="
+Write-Host "  安装目录: $Root"
+Write-Host ""
+
 $argsList = @("$Root\scripts\install.mjs")
 if ($Yes) { $argsList += "--yes" }
+if ($SkipCredentials) { $argsList += "--skip-credentials" }
 if ($Platforms) { $argsList += @("--platforms", $Platforms) }
 if ($SkipBuild) { $argsList += "--skip-build" }
 if ($ListPlatforms) { $argsList += "--list-platforms" }

@@ -14,7 +14,7 @@ curl -fsSL https://raw.githubusercontent.com/ceeyang/zentao_mcp/main/install.sh 
 irm https://raw.githubusercontent.com/ceeyang/zentao_mcp/main/install.ps1 | iex
 ```
 
-按提示输入禅道地址、账号、密码，选择 AI 平台（Cursor / Claude 等），完成后 **重启 AI 客户端**。
+按提示输入禅道账号（也可选「稍后配置」），选择 AI 平台，完成后 **重启 AI 客户端**。
 
 ## 前提
 

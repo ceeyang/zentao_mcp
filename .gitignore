@@ -5,7 +5,6 @@ dist/
 # 本地凭据（切勿提交）
 .env
 .env.local
-.env.install
 .env.*.local
 
 # 安装脚本写入 MCP 配置时的备份
