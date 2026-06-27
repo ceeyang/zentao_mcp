@@ -1,0 +1,41 @@
+# 依赖与构建
+node_modules/
+dist/
+
+# 本地凭据（切勿提交）
+.env
+.env.local
+.env.install
+.env.*.local
+
+# 安装脚本写入 MCP 配置时的备份
+*.bak.*
+
+# 发布产物
+release/
+*.tgz
+
+# 日志
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 测试 / 临时目录
+.tmp/
+tmp/
+/zentao-mcp-e2e-test/
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IDE（本地偏好，不进仓库）
+.idea/
+*.swp
+*.swo
+*~
+
+# 可选：若在本仓库根目录调试 MCP，取消下行注释
+# .cursor/mcp.json

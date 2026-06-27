@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "zentao": {
+      "command": "node",
+      "args": [
+        "/绝对路径/zentao_mcp/dist/index.js"
+      ],
+      "env": {
+        "ZENTAO_URL": "https://your-zentao-host",
+        "ZENTAO_ACCOUNT": "your_account",
+        "ZENTAO_PASSWORD": "your_password",
+        "ZENTAO_SKIP_SSL": "false",
+        "ZENTAO_ALLOW_RESOLVE_BUG": "false",
+        "ZENTAO_ALLOW_CLOSE_BUG": "false",
+        "ZENTAO_ALLOW_ACTIVATE_BUG": "false"
+      }
+    }
+  }
+}
