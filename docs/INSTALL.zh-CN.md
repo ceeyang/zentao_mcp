@@ -1,5 +1,7 @@
 # 一键安装
 
+> 功能与 AI 对话示例见 **[FEATURES.zh-CN.md](./FEATURES.zh-CN.md)**
+
 ## 一条命令（推荐）
 
 **无需 clone**，脚本从 GitHub 下载并交互配置：

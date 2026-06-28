@@ -1,6 +1,6 @@
-# 发给同事 — GitHub 一键安装
+# 发给同事 — 一键安装 + 能干什么
 
-## 复制这段给同事
+## 复制安装命令
 
 **macOS / Linux：**
 
@@ -14,34 +14,51 @@ curl -fsSL https://raw.githubusercontent.com/ceeyang/zentao_mcp/main/install.sh 
 irm https://raw.githubusercontent.com/ceeyang/zentao_mcp/main/install.ps1 | iex
 ```
 
-按提示输入禅道账号（也可选「稍后配置」），选择 AI 平台，完成后 **重启 AI 客户端**。
+- 无需 clone 仓库，脚本自动下载安装  
+- 按提示输入禅道账号（也可稍后配置）  
+- 装完 **重启 Cursor / Claude**，开聊即可  
+
+---
+
+## 装完能干什么（30 秒版）
+
+| 场景 | 在 AI 里这样说 |
+|------|----------------|
+| 检查连接 | 「调用 zentao_health_check」 |
+| 我的 Bug | 「列出指派给我的 Bug」 |
+| 修某个 Bug | 「读 Bug #12345 详情，按重现步骤帮我改代码」 |
+| 修完回写 | 「把 #12345 标为已解决，备注 xxx」（需管理员开写权限） |
+
+详细示例：[FEATURES.zh-CN.md](./FEATURES.zh-CN.md)
+
+---
 
 ## 前提
 
 - Node.js 18+
 - 能访问 GitHub 与禅道服务器
+- 一个普通禅道账号（不必管理员）
 
-## 非交互（IT 统一部署）
+---
 
-```bash
-ZENTAO_URL=https://zentao.thregw.com \
-ZENTAO_ACCOUNT=账号 \
-ZENTAO_PASSWORD=密码 \
-ZENTAO_SKIP_SSL=true \
-INSTALL_PLATFORMS=cursor,claude \
-curl -fsSL https://raw.githubusercontent.com/ceeyang/zentao_mcp/main/install.sh | bash -s -- --yes
-```
-
-## 链接说明
+## 链接
 
 | 用途 | URL |
 |------|-----|
 | 安装脚本 (sh) | https://raw.githubusercontent.com/ceeyang/zentao_mcp/main/install.sh |
 | 安装脚本 (ps1) | https://raw.githubusercontent.com/ceeyang/zentao_mcp/main/install.ps1 |
-| 仓库首页 | https://github.com/ceeyang/zentao_mcp |
+| 仓库 | https://github.com/ceeyang/zentao_mcp |
+| 功能说明 | https://github.com/ceeyang/zentao_mcp/blob/main/docs/FEATURES.zh-CN.md |
 
-发布到新仓库后，更新 `repo.config.json` 中的 `github` 字段，上述 URL 会随之变化。
+---
 
-## 离线备选
+## IT 批量部署（可选）
 
-无法访问 GitHub 时，维护者可发 `release/zentao-mcp-0.1.3.tgz`，同事解压后运行 `./install.sh`。
+```bash
+ZENTAO_URL=https://zentao.example.com \
+ZENTAO_ACCOUNT=bot \
+ZENTAO_PASSWORD=secret \
+ZENTAO_SKIP_SSL=true \
+INSTALL_PLATFORMS=auto \
+curl -fsSL https://raw.githubusercontent.com/ceeyang/zentao_mcp/main/install.sh | bash -s -- --yes
+```
