@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# 禅道 MCP 一键安装 — 无需 clone，一条命令即可
+# 禅道 MCP 一键安装 / 更新 — 无需 clone，一条命令即可
 #
 #   curl -fsSL https://raw.githubusercontent.com/ceeyang/zentao_mcp/main/install.sh | bash
 #
-# 脚本会自动：下载到 ~/.local/share/zentao-mcp → npm install → 构建 → 交互配置
-# 禅道账号可安装时输入，也可选「稍后配置」再编辑 MCP 配置文件
+# 首次安装：下载到 ~/.local/share/zentao-mcp → npm install → 构建 → 交互配置
+# 再次执行：自动从 GitHub 同步最新代码并更新依赖，保留 .env 与 node_modules
 set -euo pipefail
 
 REPO="${ZENTAO_MCP_REPO:-ceeyang/zentao_mcp}"
@@ -16,6 +16,28 @@ _is_local_install() {
   local dir
   dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   [[ -f "${dir}/scripts/install.mjs" ]]
+}
+
+_overlay_repo_to_install_dir() {
+  local extracted="$1"
+  mkdir -p "${INSTALL_DIR}"
+
+  if command -v rsync >/dev/null 2>&1; then
+    rsync -a --delete \
+      --exclude node_modules \
+      --exclude .env \
+      "${extracted}/." "${INSTALL_DIR}/"
+    return
+  fi
+
+  local item name
+  for item in "${INSTALL_DIR}"/* "${INSTALL_DIR}"/.[!.]* "${INSTALL_DIR}"/..?*; do
+    [[ -e "${item}" ]] || continue
+    name="$(basename "${item}")"
+    [[ "${name}" == "node_modules" || "${name}" == ".env" ]] && continue
+    rm -rf "${item}"
+  done
+  cp -R "${extracted}/." "${INSTALL_DIR}/"
 }
 
 _download_from_github() {
@@ -30,8 +52,6 @@ _download_from_github() {
     exit 1
   fi
 
-  mkdir -p "${INSTALL_DIR}"
-  rm -rf "${INSTALL_DIR:?}/"*
   tar -xzf "${archive}" -C "${tmp}"
   extracted="$(find "${tmp}" -mindepth 1 -maxdepth 1 -type d | head -1)"
 
@@ -41,9 +61,15 @@ _download_from_github() {
     exit 1
   fi
 
-  cp -R "${extracted}/." "${INSTALL_DIR}/"
+  if [[ -f "${INSTALL_DIR}/scripts/install.mjs" ]]; then
+    echo "→ 检测到已有安装，正在更新 ..."
+  else
+    echo "→ 首次安装，下载到 ${INSTALL_DIR} ..."
+  fi
+
+  _overlay_repo_to_install_dir "${extracted}"
   rm -rf "${tmp}"
-  echo "→ 已下载到 ${INSTALL_DIR}"
+  echo "→ 已同步到 ${INSTALL_DIR}"
 }
 
 _sync_from_github() {
@@ -51,6 +77,10 @@ _sync_from_github() {
   if [[ -d "${INSTALL_DIR}/.git" ]]; then
     git -C "${INSTALL_DIR}" fetch --depth 1 origin "${BRANCH}"
     git -C "${INSTALL_DIR}" reset --hard "origin/${BRANCH}"
+  elif [[ -f "${INSTALL_DIR}/scripts/install.mjs" ]]; then
+    echo "→ 检测到已有安装（无 git），使用归档覆盖更新 ..."
+    _download_from_github
+    return
   else
     rm -rf "${INSTALL_DIR}"
     git clone --depth 1 --branch "${BRANCH}" "https://github.com/${REPO}.git" "${INSTALL_DIR}"
@@ -85,10 +115,5 @@ if [[ "${NODE_MAJOR}" -lt 18 ]]; then
   echo "错误: 需要 Node.js >= 18，当前 $(node -v)" >&2
   exit 1
 fi
-
-echo ""
-echo "=== 禅道 MCP 安装 ==="
-echo "  安装目录: ${ROOT}"
-echo ""
 
 exec node "${ROOT}/scripts/install.mjs" "$@"

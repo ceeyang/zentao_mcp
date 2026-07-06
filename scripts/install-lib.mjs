@@ -332,20 +332,31 @@ export function detectInstalledPlatforms() {
 }
 
 export function loadExistingZentaoEnv() {
-  const candidates = [
+  const candidates = [];
+  for (const def of Object.values(PLATFORMS)) {
+    candidates.push(...def.getConfigPaths());
+  }
+  candidates.push(
     join(homedir(), ".cursor", "mcp.json"),
     join(homedir(), ".claude.json"),
-    PLATFORMS.claude.getConfigPath(),
-    PLATFORMS.windsurf.getConfigPath(),
-    join(homedir(), ".continue", "mcpServers", "mcp.json"),
-  ];
+  );
+
+  const seen = new Set();
   for (const path of candidates) {
-    if (!existsSync(path)) continue;
+    if (seen.has(path) || !existsSync(path)) continue;
+    seen.add(path);
     try {
+      if (path.endsWith(".toml")) {
+        const content = readFileSync(path, "utf8");
+        const env = parseCodexTomlEnv(content, SERVER_NAME);
+        if (env) return env;
+        continue;
+      }
       const json = JSON.parse(readFileSync(path, "utf8"));
       const env =
         json?.mcpServers?.[SERVER_NAME]?.env ??
         json?.servers?.[SERVER_NAME]?.env ??
+        json?.context_servers?.[SERVER_NAME]?.env ??
         json?.mcp?.[SERVER_NAME]?.environment;
       if (env && typeof env === "object") return env;
     } catch {
@@ -353,6 +364,87 @@ export function loadExistingZentaoEnv() {
     }
   }
   return {};
+}
+
+function parseCodexTomlEnv(content, serverName) {
+  const blockRe = new RegExp(
+    `\\[mcp_servers\\.${escapeRegExp(serverName)}\\.env\\]\\s*([\\s\\S]*?)(?=\\n\\[|$)`,
+  );
+  const match = content.match(blockRe);
+  if (!match) return null;
+  const env = {};
+  for (const line of match[1].split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const idx = trimmed.indexOf("=");
+    if (idx <= 0) continue;
+    const key = trimmed.slice(0, idx).trim();
+    let value = trimmed.slice(idx + 1).trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    env[key] = value;
+  }
+  return Object.keys(env).length > 0 ? env : null;
+}
+
+function configPathHasZentaoServer(configPath, platformKey, def) {
+  if (!existsSync(configPath)) return false;
+  if (platformKey === "codex") {
+    return readFileSync(configPath, "utf8").includes(
+      `[mcp_servers.${SERVER_NAME}]`,
+    );
+  }
+  try {
+    const root = readJsonFile(configPath);
+    if (def.serversKey && root[def.serversKey]?.[SERVER_NAME]) return true;
+    if (platformKey === "opencode" && root.mcp?.[SERVER_NAME]) return true;
+    if (platformKey === "zed" && root.context_servers?.[SERVER_NAME]) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/** Platforms that already have zentao MCP configured. */
+export function detectConfiguredPlatforms() {
+  const configured = [];
+  for (const [key, def] of Object.entries(PLATFORMS)) {
+    for (const configPath of def.getConfigPaths()) {
+      if (configPathHasZentaoServer(configPath, key, def)) {
+        configured.push(key);
+        break;
+      }
+    }
+  }
+  return [...new Set(configured)];
+}
+
+export function detectInstallMode(projectRoot) {
+  const configuredPlatforms = detectConfiguredPlatforms();
+  const hasBuild = existsSync(join(projectRoot, "dist", "index.js"));
+  const isUpdate = hasBuild || configuredPlatforms.length > 0;
+  let version;
+  try {
+    version = JSON.parse(
+      readFileSync(join(projectRoot, "package.json"), "utf8"),
+    ).version;
+  } catch {
+    version = undefined;
+  }
+  return { isUpdate, configuredPlatforms, version };
+}
+
+function hasCompleteCredentials(merged) {
+  const url = merged.ZENTAO_URL || process.env.ZENTAO_URL;
+  const account = merged.ZENTAO_ACCOUNT || process.env.ZENTAO_ACCOUNT;
+  const password = merged.ZENTAO_PASSWORD ?? process.env.ZENTAO_PASSWORD;
+  return Boolean(
+    url && account && password !== undefined && String(password) !== "",
+  );
 }
 
 function ask(rl, question, defaultValue = "") {
@@ -380,6 +472,22 @@ export async function collectCredentials(projectRoot, options = {}) {
   const fileEnv = loadEnvFile(projectRoot);
   const existingEnv = loadExistingZentaoEnv();
   const merged = { ...existingEnv, ...fileEnv, ...options.env };
+
+  if (options.isUpdate && hasCompleteCredentials(merged)) {
+    console.log("→ 保留已有禅道账号配置");
+    return {
+      env: buildEnvConfig(merged, {
+        url: merged.ZENTAO_URL,
+        account: merged.ZENTAO_ACCOUNT,
+        password: merged.ZENTAO_PASSWORD,
+        skipSsl: String(merged.ZENTAO_SKIP_SSL ?? "true").toLowerCase() !== "false",
+        allowResolve:
+          String(merged.ZENTAO_ALLOW_RESOLVE_BUG ?? "false").toLowerCase() ===
+          "true",
+      }),
+      credentialsSkipped: false,
+    };
+  }
 
   if (options.nonInteractive) {
     if (options.skipCredentials) {
@@ -508,6 +616,24 @@ export async function selectPlatforms(options = {}) {
   if (options.platforms) {
     return parsePlatformSelection(options.platforms, availableKeys);
   }
+
+  if (
+    options.isUpdate &&
+    options.configuredPlatforms?.length > 0 &&
+    !options.platforms
+  ) {
+    console.log(
+      `→ 刷新已配置平台: ${options.configuredPlatforms.join(", ")}`,
+    );
+    return options.configuredPlatforms;
+  }
+
+  if (options.isUpdate && !options.platforms) {
+    const auto = parsePlatformSelection("auto", availableKeys);
+    console.log(`→ 自动检测 AI 平台: ${auto.join(", ")}`);
+    return auto;
+  }
+
   if (options.nonInteractive) {
     const fromEnv = process.env.INSTALL_PLATFORMS || process.env.ZENTAO_INSTALL_PLATFORMS;
     const selected = parsePlatformSelection(fromEnv || "auto", availableKeys);

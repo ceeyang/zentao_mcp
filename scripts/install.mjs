@@ -5,11 +5,11 @@
  * 用户只需: curl -fsSL .../install.sh | bash
  */
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
 import { join } from "node:path";
 import {
   applyPlatformConfig,
   collectCredentials,
+  detectInstallMode,
   detectInstalledPlatforms,
   ensureBuilt,
   getProjectRoot,
@@ -55,9 +55,9 @@ function parseArgs(argv) {
 
 function printHelp() {
   console.log(`
-禅道 MCP 一键安装
+禅道 MCP 一键安装 / 更新
 
-一条命令（无需 clone）:
+一条命令（无需 clone，已安装则自动更新）:
   curl -fsSL https://raw.githubusercontent.com/ceeyang/zentao_mcp/main/install.sh | bash
 
 Options:
@@ -70,6 +70,9 @@ Options:
   --skip-credentials        非交互且不填禅道账号（稍后编辑 MCP 配置）
   -h, --help                显示帮助
 
+更新说明:
+  重复执行上述命令即可更新；已配置账号与 MCP 平台会自动保留并刷新。
+
 Environment（仅 CI / 批量部署）:
   ZENTAO_URL / ZENTAO_ACCOUNT / ZENTAO_PASSWORD
   INSTALL_PLATFORMS           auto / all / 逗号列表
@@ -80,6 +83,19 @@ Supported platforms:
     .map(([key, item]) => `${key} (${item.label})`)
     .join("\n  ")}
 `);
+}
+
+function runNpmInstall(projectRoot, isUpdate) {
+  console.log(isUpdate ? "→ 更新依赖 npm install ..." : "→ 安装依赖 npm install ...");
+  const npmCmd = process.platform === "win32" ? "npm.cmd" : "npm";
+  const install = spawnSync(npmCmd, ["install"], {
+    cwd: projectRoot,
+    stdio: "inherit",
+    shell: process.platform === "win32",
+  });
+  if (install.status !== 0) {
+    throw new Error("npm install failed");
+  }
 }
 
 function runBuild(projectRoot) {
@@ -128,19 +144,17 @@ async function main() {
   }
 
   const projectRoot = getProjectRoot();
+  const { isUpdate, configuredPlatforms, version } = detectInstallMode(projectRoot);
 
-  if (!existsSync(join(projectRoot, "node_modules"))) {
-    console.log("→ 安装依赖 npm install ...");
-    const npmCmd = process.platform === "win32" ? "npm.cmd" : "npm";
-    const install = spawnSync(npmCmd, ["install"], {
-      cwd: projectRoot,
-      stdio: "inherit",
-      shell: process.platform === "win32",
-    });
-    if (install.status !== 0) {
-      throw new Error("npm install failed");
-    }
+  console.log("");
+  console.log(isUpdate ? "=== 禅道 MCP 更新 ===" : "=== 禅道 MCP 安装 ===");
+  console.log(`  目录: ${projectRoot}`);
+  if (isUpdate && version) {
+    console.log(`  版本: v${version}`);
   }
+  console.log("");
+
+  runNpmInstall(projectRoot, isUpdate);
 
   if (!options.skipBuild) {
     runBuild(projectRoot);
@@ -150,7 +164,10 @@ async function main() {
   const entryPath = resolveEntryPath(projectRoot);
   const nodePath = resolveNodePath();
 
-  const { env, credentialsSkipped } = await collectCredentials(projectRoot, options);
+  const { env, credentialsSkipped } = await collectCredentials(projectRoot, {
+    ...options,
+    isUpdate,
+  });
   if (
     !credentialsSkipped &&
     (!env.ZENTAO_URL || !env.ZENTAO_ACCOUNT || !env.ZENTAO_PASSWORD)
@@ -158,7 +175,11 @@ async function main() {
     throw new Error("ZENTAO_URL / ZENTAO_ACCOUNT / ZENTAO_PASSWORD 不能为空");
   }
 
-  const selected = await selectPlatforms(options);
+  const selected = await selectPlatforms({
+    ...options,
+    isUpdate,
+    configuredPlatforms,
+  });
   if (selected.length === 0) {
     throw new Error("未选择任何平台");
   }
@@ -174,7 +195,7 @@ async function main() {
     console.log(`  ✓ ${merged.label}: ${merged.configPath}`);
   }
 
-  console.log("\n=== 安装完成 ===\n");
+  console.log(isUpdate ? "\n=== 更新完成 ===\n" : "\n=== 安装完成 ===\n");
   for (const item of results) {
     console.log(`[${item.label}] ${item.configPath}`);
     if (item.backupPath) console.log(`  备份: ${item.backupPath}`);
@@ -188,6 +209,7 @@ async function main() {
   1. 完全重启对应 AI 客户端
   2. 在 MCP 面板确认 "${SERVER_NAME}" 已连接
   3. 对话测试: "调用 zentao_health_check 检查禅道连接"
+${isUpdate ? "  （更新后务必重启客户端以加载新版本）" : ""}
 `);
 }
 
