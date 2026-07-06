@@ -170,6 +170,46 @@ export class ZenTaoHttpClient {
 
     return payload as T;
   }
+
+  /** Download file-read / file-download URLs (requires Token header). */
+  async fetchBinary(resourceUrl: string): Promise<{
+    data: Uint8Array;
+    contentType: string;
+  }> {
+    const url = resourceUrl.startsWith("http")
+      ? resourceUrl
+      : `${this.baseUrl}/${resourceUrl.replace(/^\//, "")}`;
+
+    const doRequest = async (): Promise<Response> => {
+      const token = await this.auth.ensureToken();
+      return fetch(url, {
+        method: "GET",
+        headers: { Token: token },
+      });
+    };
+
+    let response = await doRequest();
+    if (response.status === 401 && !this.auth.hasStaticToken()) {
+      this.auth.invalidate();
+      response = await doRequest();
+    }
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new ZenTaoApiError(response.status, text.slice(0, 500));
+    }
+
+    const contentType =
+      response.headers.get("content-type") ?? "application/octet-stream";
+    if (contentType.includes("text/html")) {
+      throw new Error(
+        `Expected binary content from ${url}, got HTML (check auth or URL)`,
+      );
+    }
+
+    const data = new Uint8Array(await response.arrayBuffer());
+    return { data, contentType };
+  }
 }
 
 export class ZenTaoApiError extends Error {

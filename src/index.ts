@@ -17,8 +17,28 @@ import {
   resolveBug,
   closeBug,
   activateBug,
+  stripBugImagesBase64,
+  buildBugImageMcpContent,
+  type BugImagesBundle,
 } from "./tools/bugs.js";
-import { toToolText } from "./utils/envelope.js";
+import { toToolText, type ToolEnvelope } from "./utils/envelope.js";
+
+function stripImageBase64FromEnvelope(
+  envelope: ToolEnvelope<unknown>,
+): ToolEnvelope<unknown> {
+  if (!envelope.ok || !envelope.data || typeof envelope.data !== "object") {
+    return envelope;
+  }
+  const data = envelope.data as { images?: BugImagesBundle };
+  if (!data.images || !Array.isArray(data.images.original)) return envelope;
+  return {
+    ...envelope,
+    data: {
+      ...data,
+      images: stripBugImagesBase64(data.images),
+    },
+  };
+}
 
 function configureTls(config: { skipSsl: boolean }): void {
   if (config.skipSsl) {
@@ -93,11 +113,16 @@ const TOOLS: Tool[] = [
   {
     name: "zentao_get_bug",
     description:
-      "Get a single bug with raw payload and AI-friendly summary including plain-text steps.",
+      "Get a single bug with full context: plain-text steps, history (actions), and downloaded images by default. Images are split into original (steps) vs follow-up (fix/history records), with latestProgress highlighting the newest update.",
     inputSchema: {
       type: "object",
       properties: {
         bugId: { type: "number", description: "Bug ID." },
+        includeImages: {
+          type: "boolean",
+          description:
+            "Download inline images from steps and history (Token auth). Default true. Set false to skip binary fetch.",
+        },
       },
       required: ["bugId"],
     },
@@ -252,7 +277,10 @@ async function main(): Promise<void> {
           });
           break;
         case "zentao_get_bug":
-          envelope = await getBug(client, { bugId: Number(input.bugId) });
+          envelope = await getBug(client, http, config.url, {
+            bugId: Number(input.bugId),
+            includeImages: input.includeImages !== false,
+          });
           break;
         case "zentao_resolve_bug":
           envelope = await resolveBug(config, client, {
@@ -300,8 +328,25 @@ async function main(): Promise<void> {
           };
       }
 
+      const content: Array<
+        | { type: "text"; text: string }
+        | { type: "image"; data: string; mimeType: string }
+      > = [{ type: "text", text: toToolText(stripImageBase64FromEnvelope(envelope)) }];
+
+      if (
+        envelope.ok &&
+        envelope.data &&
+        typeof envelope.data === "object" &&
+        "images" in envelope.data
+      ) {
+        const images = (envelope.data as { images?: BugImagesBundle }).images;
+        if (images) {
+          content.push(...buildBugImageMcpContent(images));
+        }
+      }
+
       return {
-        content: [{ type: "text", text: toToolText(envelope) }],
+        content,
         isError: !envelope.ok,
       };
     } catch (error) {
