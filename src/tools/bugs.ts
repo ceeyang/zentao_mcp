@@ -25,6 +25,8 @@ export type HealthCheckOutput = {
     resolveBugEnabled: boolean;
     closeBugEnabled: boolean;
     activateBugEnabled: boolean;
+    writeStoryEnabled: boolean;
+    writeTaskEnabled: boolean;
   };
   allowedProducts?: number[];
   defaultProductId?: number;
@@ -50,6 +52,8 @@ export async function healthCheck(
       resolveBugEnabled: config.allowResolveBug,
       closeBugEnabled: config.allowCloseBug,
       activateBugEnabled: config.allowActivateBug,
+      writeStoryEnabled: config.allowWriteStory,
+      writeTaskEnabled: config.allowWriteTask,
     },
     allowedProducts: config.allowedProducts,
     defaultProductId: config.defaultProductId,
@@ -380,7 +384,7 @@ export function summarizeBugDetail(
       return { id, name, downloadUrl };
     })
     .filter(
-      (item): item is { id: number; name: string; downloadUrl?: string } =>
+      (item): item is { id: number; name: string; downloadUrl: string | undefined } =>
         item !== null,
     );
 

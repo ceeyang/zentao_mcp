@@ -38,3 +38,6 @@ Desktop.ini
 
 # 可选：若在本仓库根目录调试 MCP，取消下行注释
 # .cursor/mcp.json
+
+# Playwright MCP snapshots
+.playwright-mcp/

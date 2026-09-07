@@ -23,6 +23,9 @@
 | ✅ | 标记已解决 / 关闭 / 重新激活（默认关闭，需环境变量开启） |
 | ✅ | 写操作 `dryRun` 预演 |
 | ✅ | 自签名 HTTPS、产品白名单、Token 自动刷新 |
+| ✅ | 查 / 提 / 改 / 关 **需求（story）**（写需开环境变量） |
+| ✅ | 查 / 建 / 改 / 开始 / 完成 / 关 **任务（task）**（写需开环境变量） |
+| ✅ | `npx @ceeyang/zentao-mcp` 直接安装，无需 clone |
 | ❌ | Bug 指派推送 / 群日报机器人（规划中，见 README） |
 
 ---
@@ -52,6 +55,19 @@ curl -fsSL https://raw.githubusercontent.com/ceeyang/zentao_mcp/main/install.sh 
 | `zentao_resolve_bug` | 标记已修复 | 需开关 |
 | `zentao_close_bug` | 关闭 Bug | 需开关 |
 | `zentao_activate_bug` | 重新激活 | 需开关 |
+| `zentao_list_scopes` | 列产品 / 项目 / 迭代，拿 ID | 只读 |
+| `zentao_list_stories` | 按产品 / 项目 / 迭代列需求 | 只读 |
+| `zentao_get_story` | 需求详情 + 描述/验收标准纯文本 | 只读 |
+| `zentao_create_story` | 提需求 | 需开关 |
+| `zentao_update_story` | 改标题 / 优先级 / 分类等 | 需开关 |
+| `zentao_change_story` | 改描述 / 验收标准（升版本） | 需开关 |
+| `zentao_close_story` / `zentao_assign_story` | 关闭 / 指派需求 | 需开关 |
+| `zentao_list_tasks` | 迭代任务 / 我的任务 | 只读 |
+| `zentao_get_task` | 任务详情 + 历史 | 只读 |
+| `zentao_create_task` | 拆任务 | 需开关 |
+| `zentao_update_task` | 改任务字段 | 需开关 |
+| `zentao_start_task` / `zentao_finish_task` | 开始 / 完成报工 | 需开关 |
+| `zentao_close_task` / `zentao_assign_task` | 关闭 / 指派任务 | 需开关 |
 
 所有工具返回统一 JSON 信封：`{ ok, data, error, meta }`，便于 AI 解析。
 
@@ -182,6 +198,91 @@ curl -fsSL https://raw.githubusercontent.com/ceeyang/zentao_mcp/main/install.sh 
 > 测试通过，关闭 Bug #12345。  
 > （或）回归失败，重新激活 #12345 并指派给 cee。
 
+
+### 7. 查需求（需求 / story）
+
+**你说：**
+
+> 先列一下有哪些产品。
+
+**AI 调用：** `zentao_list_scopes`（`kind=product`）→ 拿到产品 ID。
+
+> 列出产品 1 下未关闭的需求。
+
+**AI 调用：** `zentao_list_stories`（`scope=product`, `id=1`, `status=unclosed`）
+
+> 读需求 #5 的详情，帮我评估工作量。
+
+**AI 调用：** `zentao_get_story`（`storyId=5`）
+
+返回里包含：
+
+- `specPlain`：需求描述 HTML → 纯文本
+- `verifyPlain`：验收标准 HTML → 纯文本
+- `tasks` / `bugs`：该需求已拆的任务与关联 Bug
+
+---
+
+### 8. 提需求 / 改需求（默认关闭）
+
+需 `ZENTAO_ALLOW_WRITE_STORY=true`。
+
+**你说：**
+
+> 在产品 1 下提个需求：标题「登录支持短信验证码」，
+> 描述写清楚流程，验收标准写「验证码 5 分钟过期」。先 dryRun。
+
+**AI 调用：** `zentao_create_story`（`product=1`, `title=...`, `spec=...`, `verify=...`, `dryRun=true`）
+确认后去掉 `dryRun` 正式提交。
+
+> 把需求 #12 的优先级改成 1。
+
+**AI 调用：** `zentao_update_story`（`storyId=12`, `pri=1`）
+
+> 需求 #12 的描述要补一段限流说明。
+
+**AI 调用：** `zentao_change_story`（`storyId=12`, `spec=...`）
+
+> ⚠️ 改**描述 / 验收标准**必须用 `zentao_change_story`：禅道把 `spec`/`verify` 单独版本化，
+> 普通 `update` 接口不碰这两个字段。`change` 会让需求版本号 +1，并可能重新进入评审。
+>
+> ⚠️ 禅道 18.x 的 `PUT /stories/:id` 在需求**没有评审人**时会直接报『评审人员』不能为空，
+> 且该版本 REST 接口不接受 `needNotReview`。此时 `zentao_update_story` 会返回
+> `REVIEWER_REQUIRED`，按提示补 `reviewer`（如 `["admin"]`）即可。
+
+---
+
+### 9. 拆任务 / 报工（默认关闭）
+
+需 `ZENTAO_ALLOW_WRITE_TASK=true`。建任务要**迭代（execution）ID**，先用 `zentao_list_scopes`（`kind=execution`）拿。
+
+**你说：**
+
+> 在迭代 1 下，把需求 #5 拆成开发任务，指派给 dev1，预计 8 小时，本周内做完。
+
+**AI 调用：** `zentao_create_task`
+（`execution=1`, `story=5`, `name=...`, `assignedTo=dev1`, `estimate=8`,
+`estStarted=2026-09-08`, `deadline=2026-09-12`, `type=devel`）
+
+> 我开始做任务 #20 了。
+
+**AI 调用：** `zentao_start_task`（`taskId=20`）→ 状态变 `doing`
+
+> 任务 #20 做完了，花了 6 小时。
+
+**AI 调用：** `zentao_finish_task`（`taskId=20`, `currentConsumed=6`）→ 状态变 `done`
+
+> `currentConsumed` 是禅道必填项（本次消耗工时）；
+> `realStarted` / `finishedDate` 不传会自动填当前时间。
+
+> 看看迭代 1 里还有哪些没做完的任务。
+
+**AI 调用：** `zentao_list_tasks`（`executionId=1`, `status=wait`）
+
+> 我手上有哪些任务？
+
+**AI 调用：** `zentao_list_tasks`（不传 `executionId` 即「我的任务」）
+
 ---
 
 ## 典型工作流（AI 修 Bug）
@@ -192,6 +293,17 @@ curl -fsSL https://raw.githubusercontent.com/ceeyang/zentao_mcp/main/install.sh 
 3. AI 在仓库里改代码、跑测试
 4. 「dryRun 预演标记已解决」     → resolve_bug (dryRun)
 5. 「确认，正式提交」           → resolve_bug
+```
+
+## 典型工作流（AI 接需求）
+
+```
+1. 「有哪些产品/迭代？」        → list_scopes
+2. 「列产品 1 下未关闭需求」     → list_stories
+3. 「读需求 #5，评估工作量」     → get_story（读 specPlain / verifyPlain）
+4. 「拆成任务给 dev1，8 小时」   → create_task（先 dryRun）
+5. AI 写代码
+6. 「任务做完了，花了 6 小时」    → start_task → finish_task
 ```
 
 ---
@@ -224,6 +336,7 @@ curl -fsSL https://raw.githubusercontent.com/ceeyang/zentao_mcp/main/install.sh 
 ```bash
 npm run smoke              # 冒烟测试
 npm run test:install       # 安装流程 E2E
+npm run test:story-task    # 需求/任务端到端测试（本地禅道，见 DEV-DOCKER.zh-CN.md）
 npm run verify:github      # 检查 GitHub 一键安装 URL
 npm run install:urls       # 打印安装命令
 ```
