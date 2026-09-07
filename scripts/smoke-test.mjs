@@ -7,6 +7,7 @@ import { createInterface } from "node:readline";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 function loadEnvFromCursorMcp() {
   try {
@@ -35,8 +36,10 @@ for (const key of required) {
   }
 }
 
-const child = spawn("node", ["dist/index.js"], {
-  cwd: new URL("..", import.meta.url).pathname,
+// process.execPath + fileURLToPath: bare "node" and URL.pathname
+// (which yields "/C:/...") both break on Windows.
+const child = spawn(process.execPath, ["dist/index.js"], {
+  cwd: fileURLToPath(new URL("..", import.meta.url)),
   env: {
     ...process.env,
     NODE_TLS_REJECT_UNAUTHORIZED: process.env.ZENTAO_SKIP_SSL === "true" ? "0" : process.env.NODE_TLS_REJECT_UNAUTHORIZED,

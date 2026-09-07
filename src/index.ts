@@ -9,6 +9,7 @@ import { loadConfig } from "./config.js";
 import { TokenManager } from "./client/auth.js";
 import { ZenTaoHttpClient } from "./client/auth.js";
 import { ZenTaoClient } from "./client/zentao-client.js";
+import { StoryTaskClient } from "./client/story-task-client.js";
 import {
   healthCheck,
   listMyBugs,
@@ -21,6 +22,27 @@ import {
   buildBugImageMcpContent,
   type BugImagesBundle,
 } from "./tools/bugs.js";
+import {
+  listStories,
+  getStory,
+  createStory,
+  updateStory,
+  changeStory,
+  closeStory,
+  assignStory,
+} from "./tools/stories.js";
+import {
+  listTasks,
+  getTask,
+  createTask,
+  updateTask,
+  startTask,
+  finishTask,
+  closeTask,
+  assignTask,
+} from "./tools/tasks.js";
+import { listScopes } from "./tools/scopes.js";
+import { STORY_TASK_TOOLS } from "./tools/story-task-definitions.js";
 import { toToolText, type ToolEnvelope } from "./utils/envelope.js";
 
 function stripImageBase64FromEnvelope(
@@ -38,6 +60,13 @@ function stripImageBase64FromEnvelope(
       images: stripBugImagesBase64(data.images),
     },
   };
+}
+
+/** Keep unset optional fields undefined instead of turning them into NaN. */
+function optionalNumber(value: unknown): number | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : undefined;
 }
 
 function configureTls(config: { skipSsl: boolean }): void {
@@ -219,6 +248,7 @@ const TOOLS: Tool[] = [
       required: ["bugId"],
     },
   },
+  ...STORY_TASK_TOOLS,
 ];
 
 async function main(): Promise<void> {
@@ -234,6 +264,7 @@ async function main(): Promise<void> {
   });
   const http = new ZenTaoHttpClient(auth, config.url);
   const client = new ZenTaoClient(http);
+  const storyTask = new StoryTaskClient(http);
 
   const server = new Server(
     { name: "zentao-mcp", version: "0.1.0" },
@@ -305,6 +336,184 @@ async function main(): Promise<void> {
             bugId: Number(input.bugId),
             assignedTo: input.assignedTo as string | undefined,
             openedBuild: input.openedBuild as string[] | undefined,
+            comment: input.comment as string | undefined,
+            dryRun: Boolean(input.dryRun),
+          });
+          break;
+        case "zentao_list_scopes":
+          envelope = await listScopes(storyTask, {
+            kind: input.kind as "product" | "project" | "execution",
+            projectId: optionalNumber(input.projectId),
+            page: optionalNumber(input.page),
+            limit: optionalNumber(input.limit),
+          });
+          break;
+        case "zentao_list_stories":
+          envelope = await listStories(config, storyTask, {
+            scope: input.scope as "product" | "project" | "execution",
+            id: Number(input.id),
+            status: input.status as string | undefined,
+            storyType: input.storyType as string | undefined,
+            branch: input.branch as string | undefined,
+            order: input.order as string | undefined,
+            page: optionalNumber(input.page),
+            limit: optionalNumber(input.limit),
+          });
+          break;
+        case "zentao_get_story":
+          envelope = await getStory(storyTask, config.url, {
+            storyId: Number(input.storyId),
+          });
+          break;
+        case "zentao_create_story":
+          envelope = await createStory(config, storyTask, {
+            product: Number(input.product),
+            title: String(input.title),
+            spec: String(input.spec),
+            verify: input.verify as string | undefined,
+            category: input.category as string | undefined,
+            pri: optionalNumber(input.pri),
+            type: input.type as string | undefined,
+            module: optionalNumber(input.module),
+            plan: optionalNumber(input.plan),
+            branch: optionalNumber(input.branch),
+            estimate: optionalNumber(input.estimate),
+            reviewer: input.reviewer as string[] | undefined,
+            keywords: input.keywords as string | undefined,
+            parent: optionalNumber(input.parent),
+            dryRun: Boolean(input.dryRun),
+          });
+          break;
+        case "zentao_update_story":
+          envelope = await updateStory(config, storyTask, {
+            storyId: Number(input.storyId),
+            title: input.title as string | undefined,
+            pri: optionalNumber(input.pri),
+            category: input.category as string | undefined,
+            type: input.type as string | undefined,
+            module: optionalNumber(input.module),
+            plan: optionalNumber(input.plan),
+            estimate: optionalNumber(input.estimate),
+            stage: input.stage as string | undefined,
+            status: input.status as string | undefined,
+            keywords: input.keywords as string | undefined,
+            reviewer: input.reviewer as string[] | undefined,
+            dryRun: Boolean(input.dryRun),
+          });
+          break;
+        case "zentao_change_story":
+          envelope = await changeStory(config, storyTask, {
+            storyId: Number(input.storyId),
+            title: input.title as string | undefined,
+            spec: input.spec as string | undefined,
+            verify: input.verify as string | undefined,
+            comment: input.comment as string | undefined,
+            reviewer: input.reviewer as string[] | undefined,
+            dryRun: Boolean(input.dryRun),
+          });
+          break;
+        case "zentao_close_story":
+          envelope = await closeStory(config, storyTask, {
+            storyId: Number(input.storyId),
+            closedReason: input.closedReason as string | undefined,
+            duplicateStory: optionalNumber(input.duplicateStory),
+            comment: input.comment as string | undefined,
+            dryRun: Boolean(input.dryRun),
+          });
+          break;
+        case "zentao_assign_story":
+          envelope = await assignStory(config, storyTask, {
+            storyId: Number(input.storyId),
+            assignedTo: String(input.assignedTo),
+            comment: input.comment as string | undefined,
+            dryRun: Boolean(input.dryRun),
+          });
+          break;
+        case "zentao_list_tasks":
+          envelope = await listTasks(storyTask, {
+            executionId: optionalNumber(input.executionId),
+            status: input.status as string | undefined,
+            assignedTo: input.assignedTo as string | undefined,
+            type: input.type as string | undefined,
+            order: input.order as string | undefined,
+            page: optionalNumber(input.page),
+            limit: optionalNumber(input.limit),
+          });
+          break;
+        case "zentao_get_task":
+          envelope = await getTask(storyTask, config.url, {
+            taskId: Number(input.taskId),
+          });
+          break;
+        case "zentao_create_task":
+          envelope = await createTask(config, storyTask, {
+            execution: Number(input.execution),
+            name: String(input.name),
+            assignedTo: String(input.assignedTo),
+            estStarted: String(input.estStarted),
+            deadline: String(input.deadline),
+            type: input.type as string | undefined,
+            story: optionalNumber(input.story),
+            module: optionalNumber(input.module),
+            pri: optionalNumber(input.pri),
+            estimate: optionalNumber(input.estimate),
+            desc: input.desc as string | undefined,
+            dryRun: Boolean(input.dryRun),
+          });
+          break;
+        case "zentao_update_task":
+          envelope = await updateTask(config, storyTask, {
+            taskId: Number(input.taskId),
+            name: input.name as string | undefined,
+            type: input.type as string | undefined,
+            desc: input.desc as string | undefined,
+            assignedTo: input.assignedTo as string | undefined,
+            pri: optionalNumber(input.pri),
+            estimate: optionalNumber(input.estimate),
+            left: optionalNumber(input.left),
+            consumed: optionalNumber(input.consumed),
+            story: optionalNumber(input.story),
+            module: optionalNumber(input.module),
+            status: input.status as string | undefined,
+            estStarted: input.estStarted as string | undefined,
+            deadline: input.deadline as string | undefined,
+            dryRun: Boolean(input.dryRun),
+          });
+          break;
+        case "zentao_start_task":
+          envelope = await startTask(config, storyTask, {
+            taskId: Number(input.taskId),
+            assignedTo: input.assignedTo as string | undefined,
+            consumed: optionalNumber(input.consumed),
+            left: optionalNumber(input.left),
+            realStarted: input.realStarted as string | undefined,
+            comment: input.comment as string | undefined,
+            dryRun: Boolean(input.dryRun),
+          });
+          break;
+        case "zentao_finish_task":
+          envelope = await finishTask(config, storyTask, {
+            taskId: Number(input.taskId),
+            currentConsumed: Number(input.currentConsumed),
+            realStarted: input.realStarted as string | undefined,
+            finishedDate: input.finishedDate as string | undefined,
+            assignedTo: input.assignedTo as string | undefined,
+            comment: input.comment as string | undefined,
+            dryRun: Boolean(input.dryRun),
+          });
+          break;
+        case "zentao_close_task":
+          envelope = await closeTask(config, storyTask, {
+            taskId: Number(input.taskId),
+            comment: input.comment as string | undefined,
+            dryRun: Boolean(input.dryRun),
+          });
+          break;
+        case "zentao_assign_task":
+          envelope = await assignTask(config, storyTask, {
+            taskId: Number(input.taskId),
+            assignedTo: String(input.assignedTo),
+            left: optionalNumber(input.left),
             comment: input.comment as string | undefined,
             dryRun: Boolean(input.dryRun),
           });

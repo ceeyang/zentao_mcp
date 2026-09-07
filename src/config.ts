@@ -31,6 +31,8 @@ const configSchema = z.object({
   allowResolveBug: z.boolean(),
   allowCloseBug: z.boolean(),
   allowActivateBug: z.boolean(),
+  allowWriteStory: z.boolean(),
+  allowWriteTask: z.boolean(),
   defaultProductId: z.number().optional(),
   allowedProducts: z.array(z.number()).optional(),
 });
@@ -64,6 +66,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     allowResolveBug: parseBoolean(env.ZENTAO_ALLOW_RESOLVE_BUG),
     allowCloseBug: parseBoolean(env.ZENTAO_ALLOW_CLOSE_BUG),
     allowActivateBug: parseBoolean(env.ZENTAO_ALLOW_ACTIVATE_BUG),
+    allowWriteStory: parseBoolean(env.ZENTAO_ALLOW_WRITE_STORY),
+    allowWriteTask: parseBoolean(env.ZENTAO_ALLOW_WRITE_TASK),
     defaultProductId: parseOptionalNumber(env.ZENTAO_DEFAULT_PRODUCT_ID),
     allowedProducts: parseIdList(env.ZENTAO_ALLOWED_PRODUCTS),
   });

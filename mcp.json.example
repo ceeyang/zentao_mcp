@@ -1,10 +1,9 @@
 {
+  "_comment": "方式一（推荐）：npx 直接运行 npm 包，无需 clone 或构建",
   "mcpServers": {
     "zentao": {
-      "command": "node",
-      "args": [
-        "/绝对路径/zentao_mcp/dist/index.js"
-      ],
+      "command": "npx",
+      "args": ["-y", "@ceeyang/zentao-mcp"],
       "env": {
         "ZENTAO_URL": "https://your-zentao-host",
         "ZENTAO_ACCOUNT": "your_account",
@@ -12,7 +11,21 @@
         "ZENTAO_SKIP_SSL": "false",
         "ZENTAO_ALLOW_RESOLVE_BUG": "false",
         "ZENTAO_ALLOW_CLOSE_BUG": "false",
-        "ZENTAO_ALLOW_ACTIVATE_BUG": "false"
+        "ZENTAO_ALLOW_ACTIVATE_BUG": "false",
+        "ZENTAO_ALLOW_WRITE_STORY": "false",
+        "ZENTAO_ALLOW_WRITE_TASK": "false"
+      }
+    }
+  },
+  "_comment_local": "方式二：本地源码构建后指向 dist/index.js",
+  "_mcpServers_local": {
+    "zentao": {
+      "command": "node",
+      "args": ["/绝对路径/zentao_mcp/dist/index.js"],
+      "env": {
+        "ZENTAO_URL": "https://your-zentao-host",
+        "ZENTAO_ACCOUNT": "your_account",
+        "ZENTAO_PASSWORD": "your_password"
       }
     }
   }
